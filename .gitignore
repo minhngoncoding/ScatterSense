@@ -1,0 +1,7 @@
+results/
+
+*.swp
+
+*.pyc
+*.o*
+/data
