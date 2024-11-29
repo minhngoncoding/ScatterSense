@@ -10,6 +10,7 @@ from .kp_utils import _sigmoid, _ae_loss, _regr_loss, _neg_loss, _ae_line_loss, 
 from .kp_utils import make_tl_layer, make_br_layer, make_kp_layer, make_center_layer
 from .kp_utils import make_pool_layer, make_unpool_layer
 from .kp_utils import make_merge_layer, make_inter_layer, make_cnv_layer
+from icecream import ic
 
 class kp_module(nn.Module):
     def __init__(
@@ -1467,6 +1468,189 @@ class kp_pure_pie_s(nn.Module):
             return self._train(*xs, **kwargs)
         return self._test(*xs, **kwargs)
 
+class kp_scatter(nn.Module):
+    def __init__(
+        self, n, nstack, dims, modules, out_dim, pre=None, cnv_dim=256,
+        make_center_layer=make_center_layer,
+        make_cnv_layer=make_cnv_layer, make_heat_layer=make_kp_layer,
+        make_tag_layer=make_kp_layer, make_regr_layer=make_kp_layer,
+        make_up_layer=make_layer, make_low_layer=make_layer,
+        make_hg_layer=make_layer, make_hg_layer_revr=make_layer_revr,
+        make_pool_layer=make_pool_layer, make_unpool_layer=make_unpool_layer,
+        make_merge_layer=make_merge_layer, make_inter_layer=make_inter_layer,
+        kp_layer=residual
+    ):
+        super(kp_scatter, self).__init__()
+        print("use kp scatter")
+        self.nstack    = nstack
+        self._decode   = _decode_pure_line
+
+        curr_dim = dims[0]
+
+        self.pre = nn.Sequential(
+            convolution(7, 3, 128, stride=2),
+            residual(3, 128, 256, stride=2)
+        ) if pre is None else pre
+
+        self.kps  = nn.ModuleList([
+            kp_module(
+                n, dims, modules, layer=kp_layer,
+                make_up_layer=make_up_layer,
+                make_low_layer=make_low_layer,
+                make_hg_layer=make_hg_layer,
+                make_hg_layer_revr=make_hg_layer_revr,
+                make_pool_layer=make_pool_layer,
+                make_unpool_layer=make_unpool_layer,
+                make_merge_layer=make_merge_layer
+            ) for _ in range(nstack)
+        ])
+        self.cnvs = nn.ModuleList([
+            make_cnv_layer(curr_dim, cnv_dim) for _ in range(nstack)
+        ])
+
+        self.key_cnvs = nn.ModuleList([
+            make_center_layer(cnv_dim) for _ in range(nstack)
+        ])
+        self.hybrid_cnvs = nn.ModuleList([
+            make_center_layer(cnv_dim) for _ in range(nstack)
+        ])
+
+        ## keypoint heatmaps
+        self.key_heats = nn.ModuleList([
+            make_heat_layer(cnv_dim, curr_dim, out_dim) for _ in range(nstack)
+        ])
+        self.hybrid_heats = nn.ModuleList([
+            make_heat_layer(cnv_dim, curr_dim, out_dim) for _ in range(nstack)
+        ])
+
+        ## tags
+        self.key_tags  = nn.ModuleList([
+            make_tag_layer(cnv_dim, curr_dim, 1) for _ in range(nstack)
+        ])
+
+        for key_heat, hybrid_heat in zip(self.key_heats, self.hybrid_heats):
+            key_heat[-1].bias.data.fill_(-2.19)
+            hybrid_heat[-1].bias.data.fill_(-2.19)
+
+        self.inters = nn.ModuleList([
+            make_inter_layer(curr_dim) for _ in range(nstack - 1)
+        ])
+
+        self.inters_ = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(curr_dim, curr_dim, (1, 1), bias=False),
+                nn.BatchNorm2d(curr_dim)
+            ) for _ in range(nstack - 1)
+        ])
+        self.cnvs_   = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(cnv_dim, curr_dim, (1, 1), bias=False),
+                nn.BatchNorm2d(curr_dim)
+            ) for _ in range(nstack - 1)
+        ])
+
+        self.key_regrs = nn.ModuleList([
+            make_regr_layer(cnv_dim, curr_dim, 2) for _ in range(nstack)
+        ])
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def _train(self, *xs):
+        image   = xs[0]
+        key_inds = xs[1]
+        key_inds_grouped = xs[2]
+        tag_group_lens = xs[3]
+
+        # ic(key_inds)
+        # ic(key_inds_grouped)
+
+        inter = self.pre(image)
+        outs  = []
+        layers = zip(
+            self.kps, self.cnvs,
+            self.key_cnvs, self.hybrid_cnvs,
+            self.key_heats, self.hybrid_heats,
+            self.key_tags,
+            self.key_regrs,
+        )
+
+        for ind, layer in enumerate(layers):
+            key_tag_grouped = []
+            kp_, cnv_          = layer[0:2]
+            key_cnv_, hybrid_cnv_   = layer[2:4]
+            key_heat_, hybrid_heat_ = layer[4:6]
+            key_tag_ = layer[6]
+            key_regr_= layer[7]
+
+            kp  = kp_(inter)
+            cnv = cnv_(kp)
+
+            key_cnv = key_cnv_(cnv)
+            hybrid_cnv = hybrid_cnv_(cnv)
+
+            key_heat, hybrid_heat = key_heat_(key_cnv), hybrid_heat_(hybrid_cnv)
+            key_tag_ori  = key_tag_(cnv)
+            key_regr_ori = key_regr_(key_cnv)
+            # ic(key_tag_ori.shape, key_inds.shape)
+            key_tag  = _tranpose_and_gather_feat(key_tag_ori, key_inds)
+            key_regr = _tranpose_and_gather_feat(key_regr_ori, key_inds)
+            for g_id in range(10):
+                key_tag_grouped.append(torch.unsqueeze(_tranpose_and_gather_feat(key_tag_ori, key_inds_grouped[:, g_id,:]), 1))
+            key_tag_grouped = torch.cat(key_tag_grouped, 1)
+            outs += [key_heat, hybrid_heat, key_tag, key_tag_grouped, key_regr]
+
+            if ind < self.nstack - 1:
+                inter = self.inters_[ind](inter) + self.cnvs_[ind](cnv)
+                inter = self.relu(inter)
+                inter = self.inters[ind](inter)
+        return outs
+
+    def _test(self, *xs, **kwargs):
+        image = xs[0]
+
+        inter = self.pre(image)
+        outs = []
+        layers = zip(
+            self.kps, self.cnvs,
+            self.key_cnvs, self.hybrid_cnvs,
+            self.key_heats, self.hybrid_heats,
+            self.key_tags,
+            self.key_regrs,
+        )
+        for ind, layer in enumerate(layers):
+            kp_, cnv_ = layer[0:2]
+            key_cnv_, hybrid_cnv_ = layer[2:4]
+            key_heat_, hybrid_heat_ = layer[4:6]
+            key_tag_ = layer[6]
+            key_regr_ = layer[7]
+
+            kp  = kp_(inter)
+            cnv = cnv_(kp)
+
+            if ind == self.nstack - 1:
+                key_cnv = key_cnv_(cnv)
+                hybrid_cnv = hybrid_cnv_(cnv)
+
+                key_heat, hybrid_heat = key_heat_(key_cnv), hybrid_heat_(hybrid_cnv)
+                key_tag_ori = key_tag_(cnv)
+                key_regr_ori = key_regr_(key_cnv)
+
+                outs += [key_heat, hybrid_heat, key_tag_ori, key_regr_ori]
+
+            if ind < self.nstack - 1:
+                inter = self.inters_[ind](inter) + self.cnvs_[ind](cnv)
+                inter = self.relu(inter)
+                inter = self.inters[ind](inter)
+
+        return self._decode(*outs[-4:], **kwargs), 0, 0
+
+    def forward(self, *xs, **kwargs):
+        # print(len(xs))
+        # ic(*xs)
+        if len(xs) > 1:
+            return self._train(*xs, **kwargs)
+        return self._test(*xs, **kwargs)
+        # return torch.where(len(xs) > 1, self._train(*xs, **kwargs), self._test(*xs, **kwargs))
 
 class kp_line(nn.Module):
     def __init__(
@@ -1587,7 +1771,6 @@ class kp_line(nn.Module):
             key_heat, hybrid_heat = key_heat_(key_cnv), hybrid_heat_(hybrid_cnv)
             key_tag_ori  = key_tag_(cnv)
             key_regr_ori = key_regr_(key_cnv)
-
             key_tag  = _tranpose_and_gather_feat(key_tag_ori, key_inds)
             key_regr = _tranpose_and_gather_feat(key_regr_ori, key_inds)
             for g_id in range(16):
@@ -2046,7 +2229,6 @@ class AELoss(nn.Module):
         loss = (focal_loss + pull_loss + push_loss + regr_loss) / len(tl_heats)
         return loss.unsqueeze(0)
 
-
 class AELossPureCls(nn.Module):
     def __init__(self, pull_weight=1, push_weight=1, regr_weight=1, focal_loss=_neg_loss, lamda=4, lamdb=2):
         super(AELossPureCls, self).__init__()
@@ -2200,6 +2382,8 @@ class AELossLine(nn.Module):
 
     def forward(self, outs, targets):
         stride = 5
+        # ic(len(outs))
+        # ic(len(targets))
         key_heats = outs[0::stride]
         hybrid_heats = outs[1::stride]
         key_tags  = outs[2::stride]
@@ -2240,7 +2424,6 @@ class AELossLine(nn.Module):
 
         loss = (focal_loss + pull_loss + push_loss + regr_loss) / len(key_heats)
         return loss.unsqueeze(0)
-
 
 class AELossPurePie(nn.Module):
     def __init__(self, lamda, lamdb, regr_weight=1, focal_loss=_neg_loss):

@@ -2,6 +2,8 @@ from db.coco import Chart
 from db.coco import MSCOCO
 from db.coco import SKU
 from db.coco import Pie, Line, Bar, Cls, LineCls, LineClsReal
+from db.coco import Scatter
+
 datasets = {
     "Chart": Chart,
     "MSCOCO": MSCOCO,
@@ -11,6 +13,7 @@ datasets = {
     "Bar": Bar,
     "Cls": Cls,
     "LineCls": LineCls,
-    "LineClsReal": LineClsReal
+    "LineClsReal": LineClsReal,
+    "Scatter": Scatter,
 }
 

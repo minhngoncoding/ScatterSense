@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from .utils import convolution, residual
 
+from icecream import ic
 
 class MergeUp(nn.Module):
     def forward(self, up1, up2):
@@ -49,6 +50,11 @@ def make_cnv_layer(inp_dim, out_dim):
 
 
 def _gather_feat(feat, ind, mask=None):
+    """
+    This function extracts and optionally filters specific features from the input tensor
+    based on indices and a mask. It's often used in keypoint detection or tasks where
+    sparse locations need to be extracted from feature maps.
+    """
     dim = feat.size(2)
     ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
     feat = feat.gather(1, ind)
@@ -533,10 +539,8 @@ def _neg_loss(preds, gt, lamda, lamdb):
     neg_weights = torch.pow(1 - gt[neg_inds], lamda)
     loss = 0
     for pred in preds:
-        # print(pred.shape)
         pos_pred = pred[pos_inds]
         neg_pred = pred[neg_inds]
-        # print(pos_pred)
         pos_loss = torch.log(pos_pred) * torch.pow(1 - pos_pred, lamdb)
         neg_loss = torch.log(1 - neg_pred) * torch.pow(neg_pred, lamdb) * neg_weights
 
