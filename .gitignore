@@ -5,3 +5,8 @@ results/
 *.pyc
 *.o*
 /data
+/test_result
+/test_result
+/models/py_utils
+*.png
+*.png

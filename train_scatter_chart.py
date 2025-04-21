@@ -28,23 +28,37 @@ from db.datasets import datasets
 from torchviz import make_dot
 
 import time
-torch.backends.cudnn.enabled   = True
+
+torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = " expandable_segments:True"
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train CornerNet")
-    parser.add_argument("--cfg_file", dest="cfg_file", help="config file", default="CornerNetScatter", type=str)
-    parser.add_argument("--iter", dest="start_iter", help="train at iteration i", default=0, type=int)
+    parser.add_argument(
+        "--cfg_file",
+        dest="cfg_file",
+        help="config file",
+        default="CornerNetScatter",
+        type=str,
+    )
+    parser.add_argument(
+        "--iter", dest="start_iter", help="train at iteration i", default=0, type=int
+    )
     parser.add_argument("--threads", dest="threads", default=1, type=int)
-    parser.add_argument("--data_dir", dest="data_dir", default="./data/scatterdata", type=str)
-    parser.add_argument('--cache_path', dest="cache_path", default="", type=str)
+    parser.add_argument(
+        "--data_dir", dest="data_dir", default="./data/scatterdata", type=str
+    )
+    parser.add_argument("--cache_path", dest="cache_path", default="", type=str)
     args = parser.parse_args()
     return args
+
 
 def prefetch_data(db, queue, sample_data, data_aug):
     ind = 0
@@ -55,9 +69,10 @@ def prefetch_data(db, queue, sample_data, data_aug):
             data, ind = sample_data(db, ind, data_aug=data_aug)
             queue.put(data)
         except Exception as e:
-            print('We met some errors!')
+            print("We met some errors!")
             traceback.print_exc()
             continue
+
 
 def pin_memory(data_queue, pinned_data_queue, sema):
     while True:
@@ -75,12 +90,16 @@ def pin_memory(data_queue, pinned_data_queue, sema):
                 raise
             pass
 
+
 def init_parallel_jobs(dbs, queue, fn, data_aug):
-    tasks = [Process(target=prefetch_data, args=(db, queue, fn, data_aug)) for db in dbs]
+    tasks = [
+        Process(target=prefetch_data, args=(db, queue, fn, data_aug)) for db in dbs
+    ]
     for task in tasks:
         task.daemon = True
         task.start()
     return tasks
+
 
 def export_model_to_onnx(model, sample_data):
     # sample, ind = sample_data(training_dbs[0], 0, data_aug=True)
@@ -92,13 +111,14 @@ def export_model_to_onnx(model, sample_data):
         model,
         onnx_input,
         "model.onnx",
-        output_names = ["output"],
+        output_names=["output"],
         export_params=True,
         opset_version=12,
         do_constant_folding=True,
         verbose=True,
-        operator_export_type=torch.onnx.OperatorExportTypes.ONNX_FALLTHROUGH
+        operator_export_type=torch.onnx.OperatorExportTypes.ONNX_FALLTHROUGH,
     )
+
 
 def train(training_dbs, validation_db, start_iter):
     learning_rate = system_configs.learning_rate
@@ -117,14 +137,13 @@ def train(training_dbs, validation_db, start_iter):
     nnet = NetworkFactory(training_dbs[0])
 
     # Export the model to ONNX
-
     training_size = len(training_dbs[0].db_inds)
     validation_size = len(validation_db.db_inds)
 
     # queues storing data for training
-    training_queue   = Queue(32)
+    training_queue = Queue(32)
     # queues storing pinned data for training
-    pinned_training_queue   = queue.Queue(32)
+    pinned_training_queue = queue.Queue(32)
 
     # load data sampling function from sample/scatter.py (augmented data)
     data_file = "sample.{}".format(training_dbs[0].data)
@@ -135,7 +154,9 @@ def train(training_dbs, validation_db, start_iter):
     print("start parallel reading...")
     print("=" * 50)
 
-    training_tasks = init_parallel_jobs(training_dbs, training_queue, sample_data, data_aug=True)
+    training_tasks = init_parallel_jobs(
+        training_dbs, training_queue, sample_data, data_aug=True
+    )
     training_pin_semaphore = threading.Semaphore()
     training_pin_semaphore.acquire()
     training_pin_args = (training_queue, pinned_training_queue, training_pin_semaphore)
@@ -158,13 +179,17 @@ def train(training_dbs, validation_db, start_iter):
             save_list.sort(reverse=True)
             if len(save_list) > 0:
                 target_save = save_list[0]
-                start_iter = int(re.findall(r'\d+', target_save)[0])
-                learning_rate /= (decay_rate ** (start_iter // stepsize))
+                start_iter = int(re.findall(r"\d+", target_save)[0])
+                learning_rate /= decay_rate ** (start_iter // stepsize)
                 nnet.load_params(start_iter)
             else:
                 start_iter = 0
         nnet.set_lr(learning_rate)
-        print("training starts from iteration {} with learning_rate {}".format(start_iter + 1, learning_rate))
+        print(
+            "training starts from iteration {} with learning_rate {}".format(
+                start_iter + 1, learning_rate
+            )
+        )
     else:
         nnet.set_lr(learning_rate)
 
@@ -172,11 +197,11 @@ def train(training_dbs, validation_db, start_iter):
     nnet.cuda()
     nnet.train_mode()
 
-    if not os.path.exists('./outputs'):
-        os.makedirs('./outputs')
-        print('outputs file created')
+    if not os.path.exists("./outputs"):
+        os.makedirs("./outputs")
+        print("outputs file created")
     else:
-        print(os.listdir('./outputs'))
+        print(os.listdir("./outputs"))
 
     error_count = 0
     torch.cuda.empty_cache()
@@ -192,25 +217,43 @@ def train(training_dbs, validation_db, start_iter):
             training = pinned_training_queue.get(block=True)
 
         except:
-            print('Error when extracting data')
+            print("Error when extracting data")
             error_count += 1
             if error_count > 10:
-                print('failed')
+                print("failed")
                 time.sleep(1)
                 break
             continue
         training_loss = nnet.train(**training)
 
         if display and iteration % display == 0:
-            print("training loss at iteration {}: {}".format(iteration, training_loss.item()))
-            run.log('train_loss', training_loss.item())
-    #
+            print(
+                "training loss at iteration {}: {}".format(
+                    iteration, training_loss.item()
+                )
+            )
+            run.log("train_loss", training_loss.item())
+
+            with open("outputs/train_loss.txt", "a") as log_file:
+                log_file.write(
+                    f"Iteration {iteration}: Log Loss = {training_loss.item()}\n"
+                )
+
+        #
         if val_iter and validation_db.db_inds.size and iteration % val_iter == 0:
             nnet.eval_mode()
             validation, val_ind = sample_data(validation_db, val_ind, data_aug=False)
             validation_loss = nnet.validate(**validation)
-            print("validation loss at iteration {}: {}".format(iteration, validation_loss.item()))
-            run.log('val_loss', validation_loss.item())
+            print(
+                "validation loss at iteration {}: {}".format(
+                    iteration, validation_loss.item()
+                )
+            )
+            run.log("val_loss", validation_loss.item())
+            with open("outputs/val_loss.txt", "a") as log_file:
+                log_file.write(
+                    f"Iteration {iteration}: Log Loss = {validation_loss.item()}\n"
+                )
             nnet.train_mode()
 
         if iteration % snapshot == 0:
@@ -241,7 +284,6 @@ if __name__ == "__main__":
     configs["system"]["snapshot_name"] = args.cfg_file
     system_configs.update_config(configs["system"])
 
-
     train_split = system_configs.train_split
     val_split = system_configs.val_split
 
@@ -251,7 +293,9 @@ if __name__ == "__main__":
     print("using {} threads".format(threads))
 
     # Load the dataset using COCO format from db/datasets.py
-    training_dbs = [datasets[dataset](configs["db"], train_split) for _ in range(threads)]
+    training_dbs = [
+        datasets[dataset](configs["db"], train_split) for _ in range(threads)
+    ]
     validation_db = datasets[dataset](configs["db"], val_split)
     # pprint.pprint(training_dbs)
     # pprint.pprint(training_dbs[0])
@@ -261,7 +305,6 @@ if __name__ == "__main__":
 
     print("DB config...")
     ic(f"Split: {training_dbs[0].split}")
-
 
     print(f"len of db {len(training_dbs[0].db_inds)}")
     train(training_dbs, validation_db, args.start_iter)

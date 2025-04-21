@@ -10,6 +10,7 @@ from utils import crop_image, normalize_, color_jittering_, lighting_
 from .utils import draw_gaussian, gaussian_radius, _get_border
 from icecream import ic
 
+
 def _full_image_crop(image, detections):
     detections = detections.copy()
     height, width = image.shape[0:2]
@@ -23,13 +24,14 @@ def _full_image_crop(image, detections):
     detections[:, 1:4:2] += border[0]
     return image, detections
 
+
 def random_crop_line(image, detections, random_scales, view_size, border=64):
-    view_height, view_width   = view_size
+    view_height, view_width = view_size
     image_height, image_width = image.shape[0:2]
 
-    scale  = np.random.choice(random_scales)
+    scale = np.random.choice(random_scales)
     height = int(view_height * scale)
-    width  = int(view_width  * scale)
+    width = int(view_width * scale)
 
     cropped_image = np.zeros((height, width, 3), dtype=image.dtype)
 
@@ -39,7 +41,7 @@ def random_crop_line(image, detections, random_scales, view_size, border=64):
     ctx = np.random.randint(low=w_border, high=image_width - w_border)
     cty = np.random.randint(low=h_border, high=image_height - h_border)
 
-    x0, x1 = max(ctx - width // 2, 0),  min(ctx + width // 2, image_width)
+    x0, x1 = max(ctx - width // 2, 0), min(ctx + width // 2, image_width)
     y0, y1 = max(cty - height // 2, 0), min(cty + height // 2, image_height)
 
     left_w, right_w = ctx - x0, x1 - ctx
@@ -53,12 +55,13 @@ def random_crop_line(image, detections, random_scales, view_size, border=64):
 
     # crop detections
     cropped_detections = detections.copy()
-    cropped_detections[:, 0:cropped_detections.shape[1]:2] -= x0
-    cropped_detections[:, 1:cropped_detections.shape[1]:2] -= y0
-    cropped_detections[:, 0:cropped_detections.shape[1]:2] += cropped_ctx - left_w
-    cropped_detections[:, 1:cropped_detections.shape[1]:2] += cropped_cty - top_h
+    cropped_detections[:, 0 : cropped_detections.shape[1] : 2] -= x0
+    cropped_detections[:, 1 : cropped_detections.shape[1] : 2] -= y0
+    cropped_detections[:, 0 : cropped_detections.shape[1] : 2] += cropped_ctx - left_w
+    cropped_detections[:, 1 : cropped_detections.shape[1] : 2] += cropped_cty - top_h
 
     return cropped_image, cropped_detections, scale
+
 
 def _resize_image(image, detections, size):
     detections = detections.copy()
@@ -69,15 +72,15 @@ def _resize_image(image, detections, size):
 
     height_ratio = new_height / height
     width_ratio = new_width / width
-    detections[:, 0:detections.shape[1]:2] *= width_ratio
-    detections[:, 1:detections.shape[1]:2] *= height_ratio
+    detections[:, 0 : detections.shape[1] : 2] *= width_ratio
+    detections[:, 1 : detections.shape[1] : 2] *= height_ratio
     return image, detections
 
 
 def _clip_detections(image, detections):
     detections = detections.copy()
     height, width = image.shape[0:2]
-    '''
+    """
     for ind in range(16):
         for k in range(int(len(detections[0])/2)):
             if detections[0, 2*k] >= width:
@@ -85,9 +88,13 @@ def _clip_detections(image, detections):
                             detections[ind, 2 * k] - detections[ind, 2 * (k - 1)] + 1e-3) * (
                                                        width - 1 - detections[ind, 2 * (k - 1)]) + detections[ind, 2 * k - 1]
                 detections[ind, 2 * k] = width - 1
-    '''
-    detections[:, 0:detections.shape[1]:2] = np.clip(detections[:, 0:detections.shape[1]:2], 0, width)
-    detections[:, 1:detections.shape[1]:2] = np.clip(detections[:, 1:detections.shape[1]:2], 0, height)
+    """
+    detections[:, 0 : detections.shape[1] : 2] = np.clip(
+        detections[:, 0 : detections.shape[1] : 2], 0, width
+    )
+    detections[:, 1 : detections.shape[1] : 2] = np.clip(
+        detections[:, 1 : detections.shape[1] : 2], 0, height
+    )
     return detections
 
 
@@ -109,20 +116,30 @@ def kp_detection(db, k_ind, data_aug, debug):
     gaussian_iou = db.configs["gaussian_iou"]
     gaussian_rad = db.configs["gaussian_radius"]
 
-    max_tag_len = 256 # Max number of key-points (tags) allowed per image
-    max_tag_len_group = 128 # Maximum number of keypoints per group.
-    max_group_len = 10 # Maximum number of groups of key-points allowed per image.
+    max_tag_len = 512  # Max number of key-points (tags) allowed per image
+    max_tag_len_group = 256  # Maximum number of keypoints per group.
+    max_group_len = 10  # Maximum number of groups of key-points allowed per image.
 
     # allocating memory
     images = np.zeros((batch_size, 3, input_size[0], input_size[1]), dtype=np.float32)
-    key_heatmaps = np.zeros((batch_size, categories, output_size[0], output_size[1]), dtype=np.float32)
-    hybrid_heatmaps = np.zeros((batch_size, categories, output_size[0], output_size[1]), dtype=np.float32)
+    key_heatmaps = np.zeros(
+        (batch_size, categories, output_size[0], output_size[1]), dtype=np.float32
+    )
+    hybrid_heatmaps = np.zeros(
+        (batch_size, categories, output_size[0], output_size[1]), dtype=np.float32
+    )
     key_regrs = np.zeros((batch_size, max_tag_len, 2), dtype=np.float32)
     key_tags = np.zeros((batch_size, max_tag_len), dtype=np.int64)
-    key_tags_grouped = np.zeros((batch_size, max_group_len, max_tag_len_group), dtype=np.int64)
+    key_tags_grouped = np.zeros(
+        (batch_size, max_group_len, max_tag_len_group), dtype=np.int64
+    )
     tag_masks = np.zeros((batch_size, max_tag_len), dtype=np.uint8)
-    tag_masks_grouped = np.zeros((batch_size, max_group_len, max_tag_len_group), dtype=np.uint8)
-    hybrid_masks_grouped = np.zeros((batch_size, max_group_len, max_tag_len_group), dtype=np.uint8)
+    tag_masks_grouped = np.zeros(
+        (batch_size, max_group_len, max_tag_len_group), dtype=np.uint8
+    )
+    hybrid_masks_grouped = np.zeros(
+        (batch_size, max_group_len, max_tag_len_group), dtype=np.uint8
+    )
     tag_lens = np.zeros((batch_size,), dtype=np.int32)
     tag_group_lens = np.zeros((batch_size,), dtype=np.int32)
 
@@ -144,7 +161,7 @@ def kp_detection(db, k_ind, data_aug, debug):
             if temp == None:
                 flag = False
         ori_size = image.shape
-        #print(temp)
+        # print(temp)
         (detections, categories) = temp
 
         # print(f"Detection: {detections}")
@@ -153,7 +170,9 @@ def kp_detection(db, k_ind, data_aug, debug):
         categories = categories[0:max_group_len]
         # cropping an image randomly
         if not debug and rand_crop:
-            image, detections, scale = random_crop_line(image, detections, rand_scales, input_size, border=border)
+            image, detections, scale = random_crop_line(
+                image, detections, rand_scales, input_size, border=border
+            )
         else:
             image, detections = _full_image_crop(image, detections)
         # print("Image_size")
@@ -165,7 +184,7 @@ def kp_detection(db, k_ind, data_aug, debug):
         height_ratio = output_size[0] / input_size[0]
 
         if not debug:
-            image = image.astype(np.float32) / 255.
+            image = image.astype(np.float32) / 255.0
             if rand_color:
                 color_jittering_(data_rng, image)
                 if lighting:
@@ -178,8 +197,12 @@ def kp_detection(db, k_ind, data_aug, debug):
             # print("Category: %d" %category)
             # print("Detections: %d" % len(detections))
             fdetection = detection.copy()
-            fdetection[0:len(fdetection):2] = detection[0:len(detection):2] * width_ratio
-            fdetection[1:len(fdetection):2] = detection[1:len(detection):2] * height_ratio
+            fdetection[0 : len(fdetection) : 2] = (
+                detection[0 : len(detection) : 2] * width_ratio
+            )
+            fdetection[1 : len(fdetection) : 2] = (
+                detection[1 : len(detection) : 2] * height_ratio
+            )
             detection = fdetection.astype(np.int32)
 
             if gaussian_bump:
@@ -192,30 +215,69 @@ def kp_detection(db, k_ind, data_aug, debug):
                 else:
                     radius = gaussian_rad
                 for k in range(int(len(detection) / 2)):
-                    if not (detection[2*k] == 0 or detection[2*k+1] == 0 or detection[2*k] >= (output_size[1]-1e-2) or detection[2*k+1] >= (output_size[0]-1e-2)):
-                        if key_heatmaps[b_ind, category, detection[2 * k + 1], detection[2 * k]] < 0.85:
-                            draw_gaussian(key_heatmaps[b_ind, category], [detection[2 * k], detection[2 * k + 1]], radius)
+                    if not (
+                        detection[2 * k] == 0
+                        or detection[2 * k + 1] == 0
+                        or detection[2 * k] >= (output_size[1] - 1e-2)
+                        or detection[2 * k + 1] >= (output_size[0] - 1e-2)
+                    ):
+                        if (
+                            key_heatmaps[
+                                b_ind, category, detection[2 * k + 1], detection[2 * k]
+                            ]
+                            < 0.85
+                        ):
+                            draw_gaussian(
+                                key_heatmaps[b_ind, category],
+                                [detection[2 * k], detection[2 * k + 1]],
+                                radius,
+                            )
                         else:
-                            draw_gaussian(key_heatmaps[b_ind, category], [detection[2 * k], detection[2 * k + 1]], radius)
-                            draw_gaussian(hybrid_heatmaps[b_ind, category], [detection[2 * k], detection[2 * k + 1]],
-                                          radius)
+                            draw_gaussian(
+                                key_heatmaps[b_ind, category],
+                                [detection[2 * k], detection[2 * k + 1]],
+                                radius,
+                            )
+                            draw_gaussian(
+                                hybrid_heatmaps[b_ind, category],
+                                [detection[2 * k], detection[2 * k + 1]],
+                                radius,
+                            )
             else:
-                key_heatmaps[b_ind, category, detection[2 * k + 1], detection[2 * k]] = 1
+                key_heatmaps[
+                    b_ind, category, detection[2 * k + 1], detection[2 * k]
+                ] = 1
 
             for k in range(int(len(detection) / 2)):
-                if not (detection[2 * k] == 0 or detection[2 * k + 1] == 0 or detection[2*k] >= (output_size[1]-1e-2) or detection[2*k+1] >= (output_size[0]-1e-2)):
+                if not (
+                    detection[2 * k] == 0
+                    or detection[2 * k + 1] == 0
+                    or detection[2 * k] >= (output_size[1] - 1e-2)
+                    or detection[2 * k + 1] >= (output_size[0] - 1e-2)
+                ):
                     if tag_lens[b_ind] >= max_tag_len - 1 or k > max_tag_len_group - 1:
                         print("Too many targets, skip!")
-                        print(tag_lens[b_ind])
+                        print(tag_lens[b_ind], max_tag_len, k, max_tag_len_group)
                         print(image_file)
                         break
                     tag_ind = tag_lens[b_ind]
-                    key_regrs[b_ind, tag_ind, :] = [fdetection[2 * k] - detection[2 * k],
-                                                    fdetection[2 * k + 1] - detection[2 * k + 1]]
-                    key_tags[b_ind, tag_ind] = detection[2 * k + 1] * output_size[1] + detection[2 * k]
-                    key_tags_grouped[b_ind, ind, k] = detection[2 * k + 1] * output_size[1] + detection[2 * k]
+                    key_regrs[b_ind, tag_ind, :] = [
+                        fdetection[2 * k] - detection[2 * k],
+                        fdetection[2 * k + 1] - detection[2 * k + 1],
+                    ]
+                    key_tags[b_ind, tag_ind] = (
+                        detection[2 * k + 1] * output_size[1] + detection[2 * k]
+                    )
+                    key_tags_grouped[b_ind, ind, k] = (
+                        detection[2 * k + 1] * output_size[1] + detection[2 * k]
+                    )
                     tag_lens[b_ind] += 1
-                    if hybrid_heatmaps[b_ind, category, detection[2 * k + 1], detection[2 * k]] < 0.85:
+                    if (
+                        hybrid_heatmaps[
+                            b_ind, category, detection[2 * k + 1], detection[2 * k]
+                        ]
+                        < 0.85
+                    ):
                         tag_masks_grouped[b_ind, ind, k] = 1
                     # print("Pre_tag_ing:%d" %tag_ind)
             tag_len = tag_lens[b_ind]
@@ -234,7 +296,7 @@ def kp_detection(db, k_ind, data_aug, debug):
     tag_masks_grouped = torch.from_numpy(tag_masks_grouped)
     return {
         "xs": [images, key_tags, key_tags_grouped, tag_group_lens],
-        "ys": [key_heatmaps, hybrid_heatmaps, tag_masks, tag_masks_grouped, key_regrs]
+        "ys": [key_heatmaps, hybrid_heatmaps, tag_masks, tag_masks_grouped, key_regrs],
     }, k_ind
 
 
