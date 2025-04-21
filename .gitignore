@@ -10,3 +10,6 @@ results/
 /models/py_utils
 *.png
 *.png
+*.png
+/test_img
+/test_result
