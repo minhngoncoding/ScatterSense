@@ -13,3 +13,5 @@ results/
 *.png
 /test_img
 /test_result
+*.so
+*.png
