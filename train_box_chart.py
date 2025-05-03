@@ -38,6 +38,8 @@ import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+ic.disable()
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train CornerNet")
@@ -45,7 +47,7 @@ def parse_args():
         "--cfg_file",
         dest="cfg_file",
         help="config file",
-        default="CornerNetScatter",
+        default="CornerNetVerticalBox",
         type=str,
     )
     parser.add_argument(
@@ -53,7 +55,7 @@ def parse_args():
     )
     parser.add_argument("--threads", dest="threads", default=1, type=int)
     parser.add_argument(
-        "--data_dir", dest="data_dir", default="./data/scatterdata", type=str
+        "--data_dir", dest="data_dir", default="./data/boxdata", type=str
     )
     parser.add_argument("--cache_path", dest="cache_path", default="", type=str)
     args = parser.parse_args()
@@ -145,7 +147,7 @@ def train(training_dbs, validation_db, start_iter):
     # queues storing pinned data for training
     pinned_training_queue = queue.Queue(32)
 
-    # load data sampling function from sample/scatter.py (augmented data)
+    # load data sampling function from sample/box.py (augmented data)
     data_file = "sample.{}".format(training_dbs[0].data)
     sample_data = importlib.import_module(data_file).sample_data
     print(f"data sampling {sample_data}")
@@ -157,6 +159,8 @@ def train(training_dbs, validation_db, start_iter):
     training_tasks = init_parallel_jobs(
         training_dbs, training_queue, sample_data, data_aug=True
     )
+
+    print("start pinning data...")
     training_pin_semaphore = threading.Semaphore()
     training_pin_semaphore.acquire()
     training_pin_args = (training_queue, pinned_training_queue, training_pin_semaphore)
@@ -180,7 +184,6 @@ def train(training_dbs, validation_db, start_iter):
                 key=lambda x: int(x.split("_")[1].split(".")[0]), reverse=True
             )
 
-            print(save_list)
             if len(save_list) > 0:
                 target_save = save_list[0]
                 start_iter = int(re.findall(r"\d+", target_save)[0])
@@ -201,11 +204,11 @@ def train(training_dbs, validation_db, start_iter):
     nnet.cuda()
     nnet.train_mode()
 
-    if not os.path.exists("data/scatterdata/scatter/outputs"):
-        os.makedirs("data/scatterdata/scatter/outputs")
+    if not os.path.exists("data/boxdata/box/outputs"):
+        os.makedirs("data/boxdata/box/outputs")
         print("outputs file created")
     else:
-        print(os.listdir("data/scatterdata/scatter/outputs"))
+        print(os.listdir("data/boxdata/box/outputs"))
 
     error_count = 0
     torch.cuda.empty_cache()
@@ -216,7 +219,6 @@ def train(training_dbs, validation_db, start_iter):
             # key_tags: (4, 1024) -> (batch_size, max_tag_len)
             # key_tags_grouped: (4, 10, 1024) -> (batch_size, max_group_len, max_tag_len_group)
             # tag_group_lens: (4)
-            # tag_lens)
 
             training = pinned_training_queue.get(block=True)
         except:
@@ -227,6 +229,7 @@ def train(training_dbs, validation_db, start_iter):
                 time.sleep(1)
                 break
             continue
+
         training_loss = nnet.train(**training)
 
         if display and iteration % display == 0:
@@ -237,9 +240,7 @@ def train(training_dbs, validation_db, start_iter):
             )
             run.log("train_loss", training_loss.item())
 
-            with open(
-                "data/scatterdata/scatter/outputs/train_loss.txt", "a"
-            ) as log_file:
+            with open("data/boxdata/box/outputs/train_loss.txt", "a") as log_file:
                 log_file.write(
                     f"Iteration {iteration}: Log Loss = {training_loss.item()}\n"
                 )
@@ -255,12 +256,11 @@ def train(training_dbs, validation_db, start_iter):
                 )
             )
             run.log("val_loss", validation_loss.item())
-            with open("data/scatterdata/scatter/outputs/val_loss.txt", "a") as log_file:
+            with open("data/boxdata/box/outputs/val_loss.txt", "a") as log_file:
                 log_file.write(
                     f"Iteration {iteration}: Log Loss = {validation_loss.item()}\n"
                 )
             nnet.train_mode()
-
         if iteration % snapshot == 0:
             nnet.save_params(iteration)
 
@@ -297,6 +297,9 @@ if __name__ == "__main__":
     threads = args.threads
     print("using {} threads".format(threads))
 
+    print("System config...")
+    ic(system_configs.full)
+
     # Load the dataset using COCO format from db/datasets.py
     training_dbs = [
         datasets[dataset](configs["db"], train_split) for _ in range(threads)
@@ -304,9 +307,6 @@ if __name__ == "__main__":
     validation_db = datasets[dataset](configs["db"], val_split)
     # pprint.pprint(training_dbs)
     # pprint.pprint(training_dbs[0])
-
-    print("System config...")
-    ic(system_configs.full)
 
     print("DB config...")
     ic(f"Split: {training_dbs[0].split}")

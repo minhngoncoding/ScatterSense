@@ -1,9 +1,19 @@
 import torch
 import torch.nn as nn
 
-from .py_utils import kp_line, AELossLine, _neg_loss, convolution, residual, AELoss
+from .py_utils import (
+    kp_pure_box,
+    kp_scatter,
+    kp_pure_pie,
+    kp_pure_pie_s,
+    AELossPurePie,
+    AELossLine,
+    AELossBox,
+    _neg_loss,
+    convolution,
+    residual,
+)
 from .py_utils import TopPool, BottomPool, LeftPool, RightPool
-from .py_utils.kp import kp_scatter
 
 
 class pool(nn.Module):
@@ -111,12 +121,12 @@ def make_br_layer(dim):
     return br_pool(dim)
 
 
-def make_pool_layer(dim):
-    return nn.Sequential()
-
-
 def make_ct_layer(dim):
     return center_pool(dim)
+
+
+def make_pool_layer(dim):
+    return nn.Sequential()
 
 
 def make_hg_layer(kernel, dim0, dim1, mod, layer=convolution, **kwargs):

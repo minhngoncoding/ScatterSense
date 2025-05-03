@@ -1,7 +1,7 @@
 {
   "system": {
-    "dataset": "Pie",
-    "batch_size": 26,
+    "dataset": "Box",
+    "batch_size": 4,
     "sampling_function": "kp_detection",
 
     "train_split": "trainchart",
@@ -18,8 +18,8 @@
 
     "max_iter": 50000,
     "stepsize": 45000,
-    "snapshot": 5000,
-
+    "snapshot": 1000,
+    "display": 50,
     "chunk_sizes": [5, 7, 7, 7],
 
     "data_dir": "$AZUREML_DATAREFERENCE_workspaceblobstore/chartdata(0610)/",

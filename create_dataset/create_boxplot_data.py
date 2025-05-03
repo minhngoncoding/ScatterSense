@@ -20,7 +20,7 @@ class BoxplotDatasetGenerator:
         image_width=640,
         image_height=480,
         dpi=100,
-        output_dir="data/verticalboxdata",
+        output_dir="data/boxdata/box",
     ):
         self.num_images = num_images
         self.min_boxes = min_boxes
@@ -29,8 +29,10 @@ class BoxplotDatasetGenerator:
         self.image_height = image_height
         self.dpi = dpi
         self.output_dir = output_dir
-        self.img_dir = os.path.join(self.output_dir, "images")
-        self.annotation_file = os.path.join(self.output_dir, "annotations.json")
+        self.img_dir = os.path.join(self.output_dir, "images/test")
+        self.annotation_file = os.path.join(
+            self.output_dir, "annotations/instancesBox_test.json"
+        )
 
         os.makedirs(self.img_dir, exist_ok=True)
 
@@ -259,6 +261,6 @@ class BoxplotDatasetGenerator:
 
 # Example usage:
 if __name__ == "__main__":
-    generator = BoxplotDatasetGenerator(num_images=10000)
+    generator = BoxplotDatasetGenerator(num_images=2500)
     generator.generate_dataset()
-    # generator.visualize_sample(1)
+    generator.visualize_sample(100)

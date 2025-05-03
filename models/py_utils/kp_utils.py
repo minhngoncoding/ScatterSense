@@ -5,6 +5,7 @@ from .utils import convolution, residual
 
 from icecream import ic
 
+
 class MergeUp(nn.Module):
     def forward(self, up1, up2):
         return up1 + up2
@@ -37,7 +38,7 @@ def make_unpool_layer(dim):
 def make_kp_layer(cnv_dim, curr_dim, out_dim):
     return nn.Sequential(
         convolution(3, cnv_dim, curr_dim, with_bn=False),
-        nn.Conv2d(curr_dim, out_dim, (1, 1))
+        nn.Conv2d(curr_dim, out_dim, (1, 1)),
     )
 
 
@@ -105,7 +106,9 @@ def _getGT(scores, GT, K):
     topk_inds = GT[:, :, 2] * height * width + GT[:, :, 1] * width + GT[:, :, 0]
     topk_inds.view(1, -1)
     if topk_inds.shape[1] < K:
-        tmp = torch.zeros((topk_inds.shape[0], K - topk_inds.shape[1]), dtype=topk_inds.dtype)
+        tmp = torch.zeros(
+            (topk_inds.shape[0], K - topk_inds.shape[1]), dtype=topk_inds.dtype
+        )
         topk_inds = torch.cat((topk_inds, tmp), 1)
     else:
         topk_inds = topk_inds[:, 0:K]
@@ -125,8 +128,16 @@ def _getGT(scores, GT, K):
 
 
 def _decode(
-        tl_heat, br_heat, tl_tag, br_tag, tl_regr, br_regr,
-        K=100, kernel=1, ae_threshold=1, num_dets=1000
+    tl_heat,
+    br_heat,
+    tl_tag,
+    br_tag,
+    tl_regr,
+    br_regr,
+    K=100,
+    kernel=1,
+    ae_threshold=1,
+    num_dets=1000,
 ):
     batch, cat, height, width = tl_heat.size()
 
@@ -166,15 +177,19 @@ def _decode(
     br_regr_ = br_regr_.view(1, batch, K, 2)
     br_xs_ += br_regr_[:, :, :, 0]
     br_ys_ += br_regr_[:, :, :, 1]
-    detections_tl = torch.cat([tl_scores_, tl_tag_, tl_clses_.float(), tl_xs_, tl_ys_], dim=0)
-    detections_br = torch.cat([br_scores_, br_tag_, br_clses_.float(), br_xs_, br_ys_], dim=0)
+    detections_tl = torch.cat(
+        [tl_scores_, tl_tag_, tl_clses_.float(), tl_xs_, tl_ys_], dim=0
+    )
+    detections_br = torch.cat(
+        [br_scores_, br_tag_, br_clses_.float(), br_xs_, br_ys_], dim=0
+    )
 
     tl_ys = tl_ys.view(batch, K, 1).expand(batch, K, K)
     tl_xs = tl_xs.view(batch, K, 1).expand(batch, K, K)
     br_ys = br_ys.view(batch, 1, K).expand(batch, K, K)
     br_xs = br_xs.view(batch, 1, K).expand(batch, K, K)
     # print(tl_xs[0, :, 0])
-    '''
+    """
     if tl_regr is not None and br_regr is not None:
         tl_regr = _tranpose_and_gather_feat(tl_regr, tl_inds)
         tl_regr = tl_regr.view(batch, K, 1, 2)
@@ -185,7 +200,7 @@ def _decode(
         tl_ys = tl_ys + tl_regr[..., 1]
         br_xs = br_xs + br_regr[..., 0]
         br_ys = br_ys + br_regr[..., 1]
-    '''
+    """
     # print(tl_xs[0, :, 0])
     # print('_________________')
     # all possible boxes based on top k corners (ignoring class)
@@ -204,14 +219,14 @@ def _decode(
     # reject boxes based on classes
     tl_clses = tl_clses.view(batch, K, 1).expand(batch, K, K)
     br_clses = br_clses.view(batch, 1, K).expand(batch, K, K)
-    cls_inds = (tl_clses != br_clses)
+    cls_inds = tl_clses != br_clses
 
     # reject boxes based on distances
-    dist_inds = (dists > ae_threshold)
+    dist_inds = dists > ae_threshold
 
     # reject boxes based on widths and heights
-    width_inds = (br_xs < tl_xs)
-    height_inds = (br_ys < tl_ys)
+    width_inds = br_xs < tl_xs
+    height_inds = br_ys < tl_ys
 
     scores[cls_inds] = -1
     scores[dist_inds] = -1
@@ -238,8 +253,7 @@ def _decode(
 
 
 def _decode_pure(
-        tl_heat, br_heat, tl_regr, br_regr,
-        K=100, kernel=1, ae_threshold=1, num_dets=1000
+    tl_heat, br_heat, tl_regr, br_regr, K=100, kernel=1, ae_threshold=1, num_dets=1000
 ):
     batch, cat, height, width = tl_heat.size()
 
@@ -255,7 +269,6 @@ def _decode_pure(
     # print(tl_scores)
     tl_regr_ = _tranpose_and_gather_feat(tl_regr, tl_inds)
     br_regr_ = _tranpose_and_gather_feat(br_regr, br_inds)
-
 
     tl_scores_ = tl_scores.view(1, batch, K)
     tl_clses_ = tl_clses.view(1, batch, K)
@@ -279,6 +292,7 @@ def _decode_pure(
 
     return detections_tl, detections_br
 
+
 def _decode_line_cls(ps_results, ng_results):
     if torch.numel(ps_results) > 0:
         ps_predictions = torch.argmax(ps_results, 1)
@@ -290,9 +304,18 @@ def _decode_line_cls(ps_results, ng_results):
         ng_predictions = []
     return ps_predictions, ng_predictions
 
+
 def _decode_pure_cls(
-        tl_heat, br_heat, tl_regr, br_regr, cls, offset,
-        K=100, kernel=1, ae_threshold=1, num_dets=1000
+    tl_heat,
+    br_heat,
+    tl_regr,
+    br_regr,
+    cls,
+    offset,
+    K=100,
+    kernel=1,
+    ae_threshold=1,
+    num_dets=1000,
 ):
     batch, cat, height, width = tl_heat.size()
 
@@ -308,7 +331,6 @@ def _decode_pure_cls(
     # print(tl_scores)
     tl_regr_ = _tranpose_and_gather_feat(tl_regr, tl_inds)
     br_regr_ = _tranpose_and_gather_feat(br_regr, br_inds)
-
 
     tl_scores_ = tl_scores.view(1, batch, K)
     tl_clses_ = tl_clses.view(1, batch, K)
@@ -334,9 +356,16 @@ def _decode_pure_cls(
     offset = torch.squeeze(offset)
     return detections_tl, detections_br, cls, offset
 
+
 def _decode_pure_line(
-        key_heat, hybrid_heat, key_tag, key_regr,
-        K=100, kernel=1, ae_threshold=1, num_dets=1000
+    key_heat,
+    hybrid_heat,
+    key_tag,
+    key_regr,
+    K=100,
+    kernel=1,
+    ae_threshold=1,
+    num_dets=1000,
 ):
     batch, cat, height, width = key_heat.size()
 
@@ -348,7 +377,9 @@ def _decode_pure_line(
     hybrid_heat = _nms(hybrid_heat, kernel=kernel)
 
     key_scores, key_inds, key_clses, key_ys, key_xs = _topk(key_heat, K=K)
-    hybrid_scores, hybrid_inds, hybrid_clses, hybrid_ys, hybrid_xs = _topk(hybrid_heat, K=K)
+    hybrid_scores, hybrid_inds, hybrid_clses, hybrid_ys, hybrid_xs = _topk(
+        hybrid_heat, K=K
+    )
     # print(key_scores)
     key_regr_ = _tranpose_and_gather_feat(key_regr, key_inds)
     hybrid_regr_ = _tranpose_and_gather_feat(key_regr, hybrid_inds)
@@ -374,14 +405,26 @@ def _decode_pure_line(
     hybrid_regr_ = hybrid_regr_.view(1, batch, K, 2)
     hybrid_xs_ += hybrid_regr_[:, :, :, 0]
     hybrid_ys_ += hybrid_regr_[:, :, :, 1]
-    detections_key = torch.cat([key_scores_, key_tag_, key_clses_.float(), key_xs_, key_ys_], dim=0)
-    detections_hybrid = torch.cat([hybrid_scores_, hybrid_tag_, hybrid_clses_.float(), hybrid_xs_, hybrid_ys_], dim=0)
+    detections_key = torch.cat(
+        [key_scores_, key_tag_, key_clses_.float(), key_xs_, key_ys_], dim=0
+    )
+    detections_hybrid = torch.cat(
+        [hybrid_scores_, hybrid_tag_, hybrid_clses_.float(), hybrid_xs_, hybrid_ys_],
+        dim=0,
+    )
 
     return detections_key, detections_hybrid
 
+
 def _decode_pure_pie(
-        center_heat, key_heat, center_regr, key_regr,
-        K=100, kernel=1, ae_threshold=1, num_dets=1000
+    center_heat,
+    key_heat,
+    center_regr,
+    key_regr,
+    K=100,
+    kernel=1,
+    ae_threshold=1,
+    num_dets=1000,
 ):
     batch, cat, height, width = center_heat.size()
 
@@ -392,7 +435,9 @@ def _decode_pure_pie(
     center_heat = _nms(center_heat, kernel=kernel)
     key_heat = _nms(key_heat, kernel=kernel)
 
-    center_scores, center_inds, center_clses, center_ys, center_xs = _topk(center_heat, K=K)
+    center_scores, center_inds, center_clses, center_ys, center_xs = _topk(
+        center_heat, K=K
+    )
     key_scores, key_inds, key_clses, key_ys, key_xs = _topk(key_heat, K=K)
 
     center_regr_ = _tranpose_and_gather_feat(center_regr, center_inds)
@@ -415,15 +460,29 @@ def _decode_pure_pie(
     key_regr_ = key_regr_.view(1, batch, K, 2)
     key_xs_ += key_regr_[:, :, :, 0]
     key_ys_ += key_regr_[:, :, :, 1]
-    detections_center = torch.cat([center_scores_, center_clses_.float(), center_xs_, center_ys_], dim=0)
-    detections_key = torch.cat([key_scores_, key_clses_.float(), key_xs_, key_ys_], dim=0)
+    detections_center = torch.cat(
+        [center_scores_, center_clses_.float(), center_xs_, center_ys_], dim=0
+    )
+    detections_key = torch.cat(
+        [key_scores_, key_clses_.float(), key_xs_, key_ys_], dim=0
+    )
 
     return detections_center, detections_key
 
 
 def _decode_gt(
-        tl_heat, br_heat, tl_tag, br_tag, tl_regr, br_regr, tl_gt, br_gt,
-        K=100, kernel=1, ae_threshold=1, num_dets=1000
+    tl_heat,
+    br_heat,
+    tl_tag,
+    br_tag,
+    tl_regr,
+    br_regr,
+    tl_gt,
+    br_gt,
+    K=100,
+    kernel=1,
+    ae_threshold=1,
+    num_dets=1000,
 ):
     batch, cat, height, width = tl_heat.size()
     tl_heat = torch.sigmoid(tl_heat)
@@ -462,15 +521,19 @@ def _decode_gt(
     br_regr_ = br_regr_.view(1, batch, K, 2)
     br_xs_ += br_regr_[:, :, :, 0]
     br_ys_ += br_regr_[:, :, :, 1]
-    detections_tl = torch.cat([tl_scores_, tl_tag_, tl_clses_.float(), tl_xs_, tl_ys_], dim=0)
-    detections_br = torch.cat([br_scores_, br_tag_, br_clses_.float(), br_xs_, br_ys_], dim=0)
+    detections_tl = torch.cat(
+        [tl_scores_, tl_tag_, tl_clses_.float(), tl_xs_, tl_ys_], dim=0
+    )
+    detections_br = torch.cat(
+        [br_scores_, br_tag_, br_clses_.float(), br_xs_, br_ys_], dim=0
+    )
 
     tl_ys = tl_ys.view(batch, K, 1).expand(batch, K, K)
     tl_xs = tl_xs.view(batch, K, 1).expand(batch, K, K)
     br_ys = br_ys.view(batch, 1, K).expand(batch, K, K)
     br_xs = br_xs.view(batch, 1, K).expand(batch, K, K)
     # print(tl_xs[0, :, 0])
-    '''
+    """
     if tl_regr is not None and br_regr is not None:
         tl_regr = _tranpose_and_gather_feat(tl_regr, tl_inds)
         tl_regr = tl_regr.view(batch, K, 1, 2)
@@ -481,7 +544,7 @@ def _decode_gt(
         tl_ys = tl_ys + tl_regr[..., 1]
         br_xs = br_xs + br_regr[..., 0]
         br_ys = br_ys + br_regr[..., 1]
-    '''
+    """
     # print(tl_xs[0, :, 0])
     # print('_________________')
     # all possible boxes based on top k corners (ignoring class)
@@ -500,14 +563,14 @@ def _decode_gt(
     # reject boxes based on classes
     tl_clses = tl_clses.view(batch, K, 1).expand(batch, K, K)
     br_clses = br_clses.view(batch, 1, K).expand(batch, K, K)
-    cls_inds = (tl_clses != br_clses)
+    cls_inds = tl_clses != br_clses
 
     # reject boxes based on distances
-    dist_inds = (dists > ae_threshold)
+    dist_inds = dists > ae_threshold
 
     # reject boxes based on widths and heights
-    width_inds = (br_xs < tl_xs)
-    height_inds = (br_ys < tl_ys)
+    width_inds = br_xs < tl_xs
+    height_inds = br_ys < tl_ys
 
     scores[cls_inds] = -1
     scores[dist_inds] = -1

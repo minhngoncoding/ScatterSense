@@ -8,6 +8,7 @@ import string
 from config import system_configs
 from utils import crop_image, normalize_, color_jittering_, lighting_
 from .utils import draw_gaussian, gaussian_radius, _get_border
+from icecream import ic
 
 
 def _full_image_crop(image, detections):
@@ -98,6 +99,7 @@ def _clip_detections(image, detections):
 
 
 def kp_detection(db, k_ind, data_aug, debug):
+    # print("kp_detection")
     data_rng = system_configs.data_rng
     batch_size = system_configs.batch_size
 
@@ -114,9 +116,10 @@ def kp_detection(db, k_ind, data_aug, debug):
     gaussian_iou = db.configs["gaussian_iou"]
     gaussian_rad = db.configs["gaussian_radius"]
 
-    max_tag_len = 256
-    max_tag_len_group = 128
-    max_group_len = 16
+    max_tag_len = 512  # Max number of key-points (tags) allowed per image
+    max_tag_len_group = 256  # Maximum number of keypoints per group.
+    max_group_len = 10  # Maximum number of groups of key-points allowed per image.
+
     # allocating memory
     images = np.zeros((batch_size, 3, input_size[0], input_size[1]), dtype=np.float32)
     key_heatmaps = np.zeros(
@@ -158,12 +161,11 @@ def kp_detection(db, k_ind, data_aug, debug):
             if temp == None:
                 flag = False
         ori_size = image.shape
-        print("Image_size {}".format(ori_size))
         # print(temp)
         (detections, categories) = temp
 
-        print(f"Detection: {detections}")
-        print(f"Categories: {categories}")
+        # print(f"Detection: {detections}")
+        # print(f"Categories: {categories}")
         detections = detections[0:max_group_len]
         categories = categories[0:max_group_len]
         # cropping an image randomly
@@ -255,7 +257,7 @@ def kp_detection(db, k_ind, data_aug, debug):
                 ):
                     if tag_lens[b_ind] >= max_tag_len - 1 or k > max_tag_len_group - 1:
                         print("Too many targets, skip!")
-                        print(tag_lens[b_ind])
+                        print(tag_lens[b_ind], max_tag_len, k, max_tag_len_group)
                         print(image_file)
                         break
                     tag_ind = tag_lens[b_ind]
@@ -299,4 +301,5 @@ def kp_detection(db, k_ind, data_aug, debug):
 
 
 def sample_data(db, k_ind, data_aug=True, debug=False):
+    # Sampling function is kp_detection
     return globals()[system_configs.sampling_function](db, k_ind, data_aug, debug)
