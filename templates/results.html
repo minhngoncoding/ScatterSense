@@ -1,47 +1,134 @@
+{% load static %}
 <!DOCTYPE html>
-{% load staticfiles %}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Results</title>
+    <title>Chart Results</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #f4f4f9;
+            color: #333;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+            border-left: 4px solid #4caf50;
+            padding-left: 12px;
+            color: #2e7d32;
+        }
+
+        .images {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .images img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .form_block {
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+        }
+
+        button {
+            background: #4caf50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        button:hover {
+            background: #43a047;
+        }
+
+        pre {
+            background: #f6f8fa;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .info-block {
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+    </style>
 </head>
 <body>
-    <img src={{image}}  alt="Original" />
-    <img src={{image_painted}}  alt="Marked" />
-    <br/>
-    <h2>Type</h2>
-    <br/>
-    {{Type}}
-    <br/>
-    <h2>Y Range</h2>
-    <br/>
-    {{min2max}}
-    <br/>
-    <form method="post" enctype="multipart/form-data">
-    <div class="form_block">
-    min value: <input type="text" name="min"/>
+<div class="container">
+
+    <div class="section images">
+        <div>
+            <h2>Original</h2>
+            <img src="{{ image }}" alt="Original Image">
+        </div>
+        <div>
+            <h2>Marked</h2>
+            <img src="{{ image_painted }}" alt="Marked Image">
+        </div>
     </div>
-    <div class="form_block">
-    max value: <input type="text" name="max"/>
+
+    <div class="section">
+        <h2>Detected Chart Type</h2>
+        <div class="info-block">{{ Type }} Chart</div>
+
+        <h2>Y-Axis Range</h2>
+        <div class="info-block">{{ min2max }}</div>
     </div>
-    <button type="submit">Upload</button>
-    </form>
-    <h2>Data</h2>
-    <br/>
-    <pre>
-    {{data|linebreaks}}
-    </pre>
-    <br/>
-    <h2>ChartTitle</h2>
-    <br/>
-    {{ChartTitle}}
-    <br/>
-    <h2>ValueAxisTitle</h2>
-    <br/>
-    {{ValueAxisTitle}}
-    <br/>
-    <h2>CategoryAxisTitle</h2>
-    <br/>
-    {{CategoryAxisTitle}}
-</body>
-</html>
+
+    <div class="section">
+        <h2>Adjust Y-Axis Range</h2>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="form_block">
+                <label for="min">Min value</label>
+                <input type="text" name="min" id="min"/>
+            </div>
+            <div class="form_block">
+                <label for="max">Max value</label>
+                <input type="text" name="max" id="max"/>
+            </div>
+            <button type="submit">Update Chart</button>
+        </form>
+    </div>
+
+    <div class="section">
+        <h2>Raw Data</h2>
+        <pre>{{ data|linebreaks }}</pre>
+    </div>
+
+    <div class="section">
+        <h2>Chart Titles</h2>
+        <div class="info-block"><stro
+

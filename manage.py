@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
+
 import sys
 import os
-#os.environ["CUDA_VISIBLE_DEVICES"]="2,3"
+# os.environ["CUDA_VISIBLE_DEVICES"]="2,3"
+
 
 def main():
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server_match.settings')
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "server_match.settings")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
@@ -17,5 +19,5 @@ def main():
     execute_from_command_line(sys.argv)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

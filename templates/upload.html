@@ -1,12 +1,178 @@
-<form method="post" enctype="multipart/form-data">
-    <div class="form_block">
-    image file: <input type="file" name="file"/>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload Image & Chart Settings</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #ece9e6, #ffffff);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .content-wrapper {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    .upload-container {
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+      width: 400px;
+    }
+
+    .preview-container {
+      background: #fafafa;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+      width: 600px;
+      height: 600px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .preview-container img {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 10px;
+      object-fit: contain;
+      display: none; /* Hide initially */
+    }
+
+    .preview-placeholder {
+      position: absolute;
+      color: #aaa;
+      font-size: 1.1em;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #333;
+    }
+
+    .form-block {
+      margin-bottom: 20px;
+    }
+
+    .form-block label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #444;
+    }
+
+    .form-block input,
+    .form-block select {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1em;
+      transition: border 0.2s ease;
+      background: #fdfdfd;
+    }
+
+    .form-block input:focus,
+    .form-block select:focus {
+      border-color: #4caf50;
+      outline: none;
+    }
+
+    .submit-btn {
+      width: 100%;
+      background: #4caf50;
+      color: white;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .submit-btn:hover {
+      background: #43a047;
+    }
+  </style>
+</head>
+<body>
+  <div class="content-wrapper">
+    <!-- Upload Form -->
+    <div class="upload-container">
+      <h2>Upload Image</h2>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-block">
+          <label for="file">Image File</label>
+          <input type="file" name="file" id="file" onchange="previewImage(event)">
+        </div>
+
+        <div class="form-block">
+          <label for="min">Min Value</label>
+          <input type="text" name="min" id="min" placeholder="e.g. 0.1">
+        </div>
+
+        <div class="form-block">
+          <label for="max">Max Value</label>
+          <input type="text" name="max" id="max" placeholder="e.g. 1.0">
+        </div>
+
+        <div class="form-block">
+          <label for="chart_type">Chart Type</label>
+          <select name="chart_type" id="chart_type">
+            <option value="Scatter">Scatter</option>
+            <option value="VerticaBox">Vertical Box Plot</option>
+            <option value="Bar">Bar</option>
+          </select>
+        </div>
+
+        <button class="submit-btn" type="submit">Upload</button>
+      </form>
     </div>
-    <div class="form_block">
-    min value: <input type="text" name="min"/>
+
+    <!-- Preview Box -->
+    <div class="preview-container">
+      <span class="preview-placeholder" id="placeholder">No image selected</span>
+      <img id="preview" src="" alt="Image Preview">
     </div>
-    <div class="form_block">
-    max value: <input type="text" name="max"/>
-    </div>
-    <button type="submit">Upload</button>
-</form>
+  </div>
+
+  <script>
+    function previewImage(event) {
+      const input = event.target;
+      const preview = document.getElementById("preview");
+      const placeholder = document.getElementById("placeholder");
+
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          preview.src = e.target.result;
+          preview.style.display = "block";
+          placeholder.style.display = "none";
+        };
+        reader.readAsDataURL(input.files[0]);
+      } else {
+        preview.src = "";
+        preview.style.display = "none";
+        placeholder.style.display = "block";
+      }
+    }
+  </script>
+</body>
+</html>
+
