@@ -16,3 +16,4 @@ results/
 *.so
 *.png
 *.png
+.env
